@@ -26,6 +26,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "validate": "npm run build && npm run type-check && npm run lint && npm run test:coverage && npm pack --dry-run",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
