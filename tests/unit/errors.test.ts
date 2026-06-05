@@ -57,4 +57,41 @@ describe('Error Classes', () => {
     
     expect(error.isRateLimitError()).toBe(true);
   });
+
+  it('should detect token, rate limit, and permission variants', () => {
+    expect(
+      new ApiError({
+        message: 'OAuth token issue',
+        type: 'OAuthException',
+        code: 999,
+      }).isTokenError()
+    ).toBe(true);
+
+    expect(
+      new ApiError({
+        message: 'Not token related',
+        type: 'GraphMethodException',
+        code: 999,
+      }).isTokenError()
+    ).toBe(false);
+
+    expect(new ApiError({ message: 'Rate limit', type: 'RateLimitError', code: 17 }).isRateLimitError()).toBe(
+      true
+    );
+    expect(new ApiError({ message: 'Rate limit', type: 'RateLimitError', code: 32 }).isRateLimitError()).toBe(
+      true
+    );
+    expect(new ApiError({ message: 'Not rate limit', type: 'ApiError', code: 999 }).isRateLimitError()).toBe(
+      false
+    );
+
+    expect(new ApiError({ message: 'Permission', type: 'ApiError', code: 10 }).isPermissionError()).toBe(true);
+    expect(new ApiError({ message: 'Permission', type: 'ApiError', code: 200 }).isPermissionError()).toBe(true);
+    expect(
+      new ApiError({ message: 'Permission', type: 'OAuthException', code: 999 }).isPermissionError()
+    ).toBe(true);
+    expect(new ApiError({ message: 'No permission issue', type: 'ApiError', code: 999 }).isPermissionError()).toBe(
+      false
+    );
+  });
 });
