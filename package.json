@@ -2,6 +2,10 @@
   "name": "@felipeequaresma/instagram-api-sdk",
   "version": "1.0.1",
   "description": "TypeScript SDK for Instagram Graph API with authentication, messaging, comments, and webhooks",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/felipeequaresma/instagram-api-sdk.git"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
