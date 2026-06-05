@@ -220,5 +220,6 @@ describe('HttpClient', () => {
     const error = new Error('bad request interceptor');
 
     await expect(requestRejected(error)).rejects.toBe(error);
+    await expect(requestRejected('string error')).rejects.toThrow('string error');
   });
 });

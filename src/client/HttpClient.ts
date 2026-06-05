@@ -71,8 +71,9 @@ export class HttpClient {
         return config;
       },
       (error) => {
-        logger.error('Request interceptor error', error);
-        return Promise.reject(error);
+        const rejection = error instanceof Error ? error : new Error(String(error));
+        logger.error('Request interceptor error', rejection);
+        return Promise.reject(rejection);
       }
     );
 
