@@ -13,7 +13,7 @@ Complete guide to Instagram OAuth authentication and token management.
 ### Step 1: Generate Authorization URL
 
 ```typescript
-import { InstagramClient } from '@felipeequaresma-design/instagram-api-sdk';
+import { InstagramClient } from '@felipeequaresma/instagram-api-sdk';
 
 const instagram = new InstagramClient({
   appId: 'YOUR_APP_ID',
@@ -21,11 +21,14 @@ const instagram = new InstagramClient({
   redirectUri: 'https://yourapp.com/auth/callback',
 });
 
-const authUrl = instagram.getAuthUrl([
-  'instagram_business_basic',
-  'instagram_business_manage_messages',
-  'instagram_business_manage_comments',
-], 'random_state_for_csrf');
+const authUrl = instagram.getAuthUrl({
+  scopes: [
+    'instagram_business_basic',
+    'instagram_business_manage_messages',
+    'instagram_business_manage_comments',
+  ],
+  state: 'random_state_for_csrf',
+});
 
 // Redirect user to authUrl
 ```
@@ -102,7 +105,7 @@ const instagram = new InstagramClient({
 Implement `ITokenStorage` for database, Redis, etc.:
 
 ```typescript
-import { ITokenStorage, TokenData } from '@felipeequaresma-design/instagram-api-sdk';
+import { ITokenStorage, TokenData } from '@felipeequaresma/instagram-api-sdk';
 
 class DatabaseTokenStorage implements ITokenStorage {
   async get(userId: string): Promise<TokenData | null> {

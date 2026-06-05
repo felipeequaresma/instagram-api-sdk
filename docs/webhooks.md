@@ -17,7 +17,7 @@ Webhooks allow your application to receive real-time notifications for events li
 ### 1. Create Webhook Handler
 
 ```typescript
-import { InstagramClient } from '@felipeequaresma-design/instagram-api-sdk';
+import { InstagramClient } from '@felipeequaresma/instagram-api-sdk';
 
 const instagram = new InstagramClient({
   appId: 'YOUR_APP_ID',

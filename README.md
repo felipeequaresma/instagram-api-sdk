@@ -1,266 +1,384 @@
 # Instagram API SDK
 
-Enterprise-grade TypeScript SDK for Instagram Graph API with authentication, automatic token refresh, messaging, comments, and webhooks.
+TypeScript SDK for the Instagram Graph API. The package provides OAuth helpers,
+token storage, automatic long-lived token refresh, direct messages, comments,
+media access, webhook handling, rate limiting, retries, and typed errors.
 
-[![npm version](https://img.shields.io/npm/v/@felipeequaresma/instagram-api-sdk.svg)](https://www.npmjs.com/package/@felipeequaresma/instagram-api-sdk)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+## Requirements
 
-## ✨ Features
+- Node.js 18 or later
+- Instagram Business or Creator account
+- Meta app configured with Instagram Graph API access
+- App ID and app secret from Meta for Developers
 
-- 🔐 **Complete OAuth Flow** - Authorization URL generation, token exchange, and automatic refresh
-- 🔄 **Automatic Token Management** - Short-to-long token exchange and auto-refresh 7 days before expiry
-- 💬 **Direct Messages** - Send text, images, videos, and manage conversations
-- 💭 **Comments API** - List, reply, hide/unhide, and delete comments
-- 📸 **Media API** - Retrieve user media, insights, and carousel children
-- 🪝 **Webhooks** - Type-safe event handlers with signature verification
-- 🛡️ **Type-Safe** - Full TypeScript support with comprehensive type definitions
-- ⚡ **Rate Limiting** - Automatic rate limiting with token bucket algorithm
-- 🔁 **Retry Logic** - Exponential backoff for transient errors
-- 🔌 **Pluggable Storage** - Custom token storage implementations
-
-## 📦 Installation
+## Installation
 
 ```bash
 npm install @felipeequaresma/instagram-api-sdk
 ```
 
-## 🚀 Quick Start
+## Basic Usage
 
 ```typescript
 import { InstagramClient } from '@felipeequaresma/instagram-api-sdk';
 
+const instagram = new InstagramClient({
+  appId: process.env.INSTAGRAM_APP_ID!,
+  appSecret: process.env.INSTAGRAM_APP_SECRET!,
+  redirectUri: 'https://example.com/auth/callback',
+});
 
-// 4. Use the API
-await instagram.messages.sendText('recipient_id', 'Hello from SDK!');
+const authUrl = instagram.getAuthUrl({
+  state: 'csrf-state',
+});
+
+// Redirect the user to authUrl. After the callback:
+const userId = await instagram.authenticate(codeFromCallback);
+
+await instagram.messages.sendText('recipient_id', 'Message text');
 const comments = await instagram.comments.list('media_id');
 const media = await instagram.media.list();
 ```
 
-## 📖 Documentation
-
-### Authentication
-
-#### OAuth Flow
+## Client Configuration
 
 ```typescript
-// Step 1: Generate authorization URL
-const authUrl = instagram.getAuthUrl([
-  'instagram_business_basic',
-  'instagram_business_manage_messages',
-  'instagram_business_manage_comments',
-], 'optional_state_parameter');
+import {
+  FileTokenStorage,
+  InstagramClient,
+} from '@felipeequaresma/instagram-api-sdk';
 
-// Step 2: Redirect user to authUrl
-// User authorizes your app and is redirected back with a code
-
-// Step 3: Exchange code for long-lived token
-const userId = await instagram.authenticate(code);
-// Token is automatically saved and will be refreshed 7 days before expiry
+const instagram = new InstagramClient({
+  appId: 'META_APP_ID',
+  appSecret: 'META_APP_SECRET',
+  redirectUri: 'https://example.com/auth/callback',
+  tokenStorage: new FileTokenStorage('./tokens.json'),
+  debug: false,
+  timeout: 30000,
+  rateLimit: 200,
+  apiVersion: 'v21.0',
+  defaultScopes: [
+    'instagram_business_basic',
+    'instagram_business_manage_messages',
+    'instagram_business_manage_comments',
+    'instagram_business_content_publish',
+  ],
+});
 ```
 
-#### Manual Token Management
+| Option | Required | Default | Description |
+| --- | --- | --- | --- |
+| `appId` | Yes | None | Meta app ID. |
+| `appSecret` | Yes | None | Meta app secret. |
+| `redirectUri` | No | `http://localhost:3000/auth/callback` | OAuth callback URL. |
+| `tokenStorage` | No | `FileTokenStorage('./tokens.json')` | Token persistence adapter. |
+| `debug` | No | `false` | Enables SDK debug logs. |
+| `timeout` | No | `30000` | HTTP timeout in milliseconds. |
+| `rateLimit` | No | `200` | Requests per hour used by the local rate limiter. |
+| `apiVersion` | No | `v21.0` | Instagram Graph API version. |
+| `defaultScopes` | No | SDK default scopes | OAuth scopes used by `getAuthUrl()`. |
+| `onTokenGenerated` | No | None | Callback called after token generation. |
+
+## Authentication
+
+### Generate an Authorization URL
 
 ```typescript
-// Set access token directly
-instagram.setAccessToken('your_access_token');
+const authUrl = instagram.getAuthUrl({
+  scopes: [
+    'instagram_business_basic',
+    'instagram_business_manage_messages',
+    'instagram_business_manage_comments',
+  ],
+  state: 'csrf-state',
+});
+```
 
-// Access auth manager for advanced operations
+If `scopes` is omitted, the client uses the configured `defaultScopes`.
+
+### Exchange the Callback Code
+
+```typescript
+const userId = await instagram.authenticate(codeFromCallback);
+```
+
+`authenticate()` performs the short-lived token exchange, converts it to a
+long-lived token, stores it through the configured token storage, schedules
+automatic refresh, and sets the authenticated user as the active API context.
+
+To authenticate without setting the active context:
+
+```typescript
+const userId = await instagram.authenticate(codeFromCallback, false);
+```
+
+### Use an Existing Token
+
+```typescript
+instagram.setAccessToken('long_lived_access_token');
+```
+
+Or load a stored token by user ID:
+
+```typescript
+await instagram.setUser('instagram_user_id');
+```
+
+### Advanced Auth Operations
+
+```typescript
 const tokenInfo = await instagram.auth.introspectToken(accessToken);
 const refreshed = await instagram.auth.refreshToken(accessToken);
 ```
 
+## API Modules
+
 ### Direct Messages
 
 ```typescript
-// Send text message
-await instagram.messages.sendText('recipient_id', 'Hello!');
-
-// Send image
+await instagram.messages.sendText('recipient_id', 'Hello');
 await instagram.messages.sendImage('recipient_id', 'https://example.com/image.jpg');
-
-// Send video
 await instagram.messages.sendVideo('recipient_id', 'https://example.com/video.mp4');
 
-// Get conversations
 const conversations = await instagram.messages.getConversations(25);
-
-// Get messages in a conversation
 const messages = await instagram.messages.getMessages('conversation_id', 25);
-
-// Mark message as read
 await instagram.messages.markAsRead('message_id');
 ```
 
-**Note:** You can only send messages within a 24-hour window after the user initiates the conversation.
+Instagram messaging rules still apply. In most cases, business accounts can only
+send direct messages inside the allowed response window after the user initiates
+the conversation.
 
 ### Comments
 
 ```typescript
-// List comments on media
 const comments = await instagram.comments.list('media_id', 25);
-
-// Get a specific comment
 const comment = await instagram.comments.get('comment_id');
-
-// Get replies to a comment
 const replies = await instagram.comments.getReplies('comment_id', 25);
 
-// Reply to a comment
 await instagram.comments.reply({
   commentId: 'comment_id',
-  message: 'Thanks for your comment!',
+  message: 'Reply text',
 });
 
-// Hide/unhide a comment
 await instagram.comments.hide('comment_id');
 await instagram.comments.unhide('comment_id');
-
-// Delete a comment
 await instagram.comments.delete('comment_id');
 ```
 
 ### Media
 
 ```typescript
-// Get user's media
 const media = await instagram.media.list(25);
-
-// Get specific media
 const post = await instagram.media.get('media_id');
-
-// Get media insights
 const insights = await instagram.media.getInsights('media_id');
-// Returns: { impressions, reach, engagement, saved }
-
-// Get carousel children
 const children = await instagram.media.getChildren('carousel_media_id');
 ```
 
-### Webhooks
+`getInsights()` returns:
 
 ```typescript
-// Create webhook handler
-const webhook = instagram.createWebhookHandler('YOUR_VERIFY_TOKEN');
+{
+  impressions: number;
+  reach: number;
+  engagement: number;
+  saved: number;
+}
+```
 
-// Handle verification challenge (for webhook setup)
+## Webhooks
+
+```typescript
+const webhook = instagram.createWebhookHandler('VERIFY_TOKEN');
+
 app.get('/webhook', (req, res) => {
   const challenge = webhook.handleVerification(req.query);
-  if (challenge) {
-    res.send(challenge);
-  } else {
+  if (!challenge) {
     res.sendStatus(403);
+    return;
   }
+
+  res.send(challenge);
 });
 
-// Handle webhook events
 app.post('/webhook', (req, res) => {
   const signature = req.headers['x-hub-signature-256'];
   const payload = JSON.stringify(req.body);
-  
+
   try {
-    webhook.processEvent(payload, signature);
+    webhook.processEvent(payload, String(signature || ''));
     res.sendStatus(200);
-  } catch (error) {
+  } catch {
     res.sendStatus(403);
   }
 });
 
-// Listen to events
 webhook.on('messages', (event) => {
-  console.log('New message:', event.message);
+  console.log(event.message);
+});
+
+webhook.on('message_reactions', (event) => {
+  console.log(event.reaction);
 });
 
 webhook.on('comments', (change) => {
-  console.log('New comment:', change.value);
+  console.log(change.value);
 });
 
 webhook.on('mentions', (change) => {
-  console.log('New mention:', change.value);
+  console.log(change.value);
+});
+
+webhook.on('story_insights', (change) => {
+  console.log(change.value);
 });
 ```
 
-## 🔧 Configuration
+`processEvent()` verifies the `x-hub-signature-256` signature with the app secret
+and throws `WebhookVerificationError` when verification fails.
+
+## Token Storage
+
+The SDK includes file-based and in-memory storage adapters:
 
 ```typescript
-const instagram = new InstagramClient({
-  appId: 'YOUR_APP_ID',              // Required
-  appSecret: 'YOUR_APP_SECRET',      // Required
-  redirectUri: 'YOUR_REDIRECT_URI',  // Optional, default: http://localhost:3000/auth/callback
-  tokenStorage: new FileTokenStorage('./tokens.json'), // Optional, default: FileTokenStorage
-  debug: true,                       // Optional, enables debug logging
-  timeout: 30000,                    // Optional, HTTP timeout in ms
-  rateLimit: 200,                    // Optional, requests per hour
-});
+import {
+  FileTokenStorage,
+  MemoryTokenStorage,
+} from '@felipeequaresma/instagram-api-sdk';
 ```
 
-### Custom Token Storage
-
-Implement the `ITokenStorage` interface for custom storage (database, Redis, etc.):
+For production, implement `ITokenStorage` and persist tokens in your database or
+secret storage.
 
 ```typescript
-import { ITokenStorage, TokenData } from '@felipeequaresma/instagram-api-sdk';
+import type {
+  ITokenStorage,
+  TokenData,
+} from '@felipeequaresma/instagram-api-sdk';
 
 class DatabaseTokenStorage implements ITokenStorage {
   async get(userId: string): Promise<TokenData | null> {
-    // Fetch from database
+    return loadTokenFromDatabase(userId);
   }
-  
+
   async set(userId: string, token: TokenData): Promise<void> {
-    // Save to database
+    await saveTokenToDatabase(userId, token);
   }
-  
+
   async delete(userId: string): Promise<void> {
-    // Delete from database
+    await deleteTokenFromDatabase(userId);
   }
 }
-
-const instagram = new InstagramClient({
-  appId: 'YOUR_APP_ID',
-  appSecret: 'YOUR_APP_SECRET',
-  tokenStorage: new DatabaseTokenStorage(),
-});
 ```
 
-## 🎯 API Reference
+Tokens should be encrypted at rest and should not be committed to version
+control.
 
-See the [docs](./docs) folder for detailed API documentation:
+## Errors
 
-- [Authentication](./docs/authentication.md) - OAuth flow and token management
-- [Messages](./docs/messages.md) - Direct messaging API
-- [Comments](./docs/comments.md) - Comments management
-- [Webhooks](./docs/webhooks.md) - Webhook setup and event handling
+The package exports typed errors:
 
-## 📋 Requirements
+```typescript
+import {
+  ApiError,
+  AuthenticationError,
+  NetworkError,
+  RateLimitError,
+  ValidationError,
+  WebhookVerificationError,
+} from '@felipeequaresma/instagram-api-sdk';
+```
 
-- Node.js >= 18.0.0
-- Instagram Business or Creator account
-- Facebook App with Instagram Graph API access
+Example:
 
-## 🔒 Instagram API Limitations
+```typescript
+try {
+  await instagram.authenticate(codeFromCallback);
+} catch (error) {
+  if (error instanceof AuthenticationError) {
+    // Invalid code, expired code, or token exchange failure.
+  }
 
-- **DMs**: Can only send messages within 24-hour window after user initiates conversation
-- **Account Types**: Requires Instagram Business/Creator account (not personal accounts)
-- **Rate Limits**: 200 calls/user/hour (general), up to 100 calls/sec for messaging
-- **Webhooks**: Require HTTPS endpoint for production use
+  throw error;
+}
+```
 
-## 🧪 Examples
+## API Limitations
 
-Check the [examples](./examples) folder for complete working examples:
+- Personal Instagram accounts are not supported by the Instagram Graph API.
+- Production webhook endpoints must use HTTPS.
+- Messaging, comment, media, and insight operations require the corresponding
+  scopes and Meta app permissions.
+- Instagram and Meta rate limits still apply. The SDK rate limiter only controls
+  local request pacing.
 
-- `basic-auth.ts` - OAuth flow example
-- `send-message.ts` - DM sending example
-- `fetch-comments.ts` - Comments retrieval
-- `webhook-server.ts` - Complete webhook server with Express
+## Examples
 
-## 🤝 Contributing
+The `examples` directory contains runnable examples:
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+- `examples/basic-auth.ts`
+- `examples/send-message.ts`
+- `examples/fetch-comments.ts`
+- `examples/webhook-server.ts`
+- `examples/database-integration.ts`
+- `examples/custom-config.ts`
 
-## 📄 License
+## Additional Guides
 
-MIT © Felipe Quaresma
+- [Authentication](./docs/authentication.md)
+- [Token persistence and database integration](./docs/database-integration.md)
+- [Webhooks](./docs/webhooks.md)
 
-## 🙏 Acknowledgments
+## Contributing
 
-Built with ❤️ using the [Instagram Graph API](https://developers.facebook.com/docs/instagram-api)
+Contributions are handled through GitHub issues and pull requests.
+
+- Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request.
+- Follow [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) in project discussions.
+- Use the issue templates for bug reports and feature requests.
+- Run `npm run validate` before submitting changes.
+
+## Development
+
+```bash
+npm ci
+cp .env.example .env
+npm run build
+npm run type-check
+npm run lint
+npm test
+npm run test:coverage
+```
+
+Run the complete validation pipeline:
+
+```bash
+npm run validate
+```
+
+The project enforces 100 percent coverage for statements, branches, functions,
+and lines.
+
+## Publishing
+
+Publishing is handled by GitHub Actions through npm Trusted Publishing.
+
+The production workflow runs:
+
+```bash
+npm ci
+npm run validate
+npm publish
+```
+
+Create and push a version tag to publish a new release:
+
+```bash
+npm version patch
+git push --follow-tags
+```
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

@@ -110,7 +110,7 @@ model InstagramToken {
 
 // lib/instagram-storage.ts
 import { PrismaClient } from '@prisma/client'
-import { DatabaseTokenStorage, type TokenData } from '@felipeequaresma-design/instagram-api-sdk'
+import { DatabaseTokenStorage, type TokenData } from '@felipeequaresma/instagram-api-sdk'
 
 export class PrismaTokenStorage extends DatabaseTokenStorage {
   constructor(private prisma: PrismaClient) {
@@ -156,7 +156,7 @@ export class PrismaTokenStorage extends DatabaseTokenStorage {
 }
 
 // Usage
-import { InstagramClient } from '@felipeequaresma-design/instagram-api-sdk'
+import { InstagramClient } from '@felipeequaresma/instagram-api-sdk'
 import { PrismaClient } from '@prisma/client'
 import { PrismaTokenStorage } from './lib/instagram-storage'
 

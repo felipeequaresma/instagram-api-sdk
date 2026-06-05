@@ -13,7 +13,7 @@ The Instagram API SDK provides multiple ways to persist tokens in your database:
 The simplest way to persist tokens is using the `onTokenGenerated` callback:
 
 ```typescript
-import { InstagramClient } from '@felipeequaresma-design/instagram-api-sdk';
+import { InstagramClient } from '@felipeequaresma/instagram-api-sdk';
 
 const instagram = new InstagramClient({
   appId: 'YOUR_APP_ID',
@@ -71,7 +71,7 @@ Create a custom storage adapter that integrates directly with your database:
 ```typescript
 // lib/instagram-storage.ts
 import { PrismaClient } from '@prisma/client';
-import { DatabaseTokenStorage, type TokenData } from '@felipeequaresma-design/instagram-api-sdk';
+import { DatabaseTokenStorage, type TokenData } from '@felipeequaresma/instagram-api-sdk';
 
 export class PrismaTokenStorage extends DatabaseTokenStorage {
   constructor(private prisma: PrismaClient) {
@@ -117,7 +117,7 @@ export class PrismaTokenStorage extends DatabaseTokenStorage {
 }
 
 // Usage
-import { InstagramClient } from '@felipeequaresma-design/instagram-api-sdk';
+import { InstagramClient } from '@felipeequaresma/instagram-api-sdk';
 import { PrismaClient } from '@prisma/client';
 import { PrismaTokenStorage } from './lib/instagram-storage';
 
@@ -149,7 +149,7 @@ model InstagramToken {
 
 ```typescript
 import { MongoClient, Db } from 'mongodb';
-import { DatabaseTokenStorage, type TokenData } from '@felipeequaresma-design/instagram-api-sdk';
+import { DatabaseTokenStorage, type TokenData } from '@felipeequaresma/instagram-api-sdk';
 
 class MongoTokenStorage extends DatabaseTokenStorage {
   constructor(private db: Db) {
@@ -187,7 +187,7 @@ class MongoTokenStorage extends DatabaseTokenStorage {
 
 ```typescript
 import { Repository } from 'typeorm';
-import { DatabaseTokenStorage, type TokenData } from '@felipeequaresma-design/instagram-api-sdk';
+import { DatabaseTokenStorage, type TokenData } from '@felipeequaresma/instagram-api-sdk';
 
 class TypeORMTokenStorage extends DatabaseTokenStorage {
   constructor(private repository: Repository<InstagramToken>) {
@@ -245,7 +245,7 @@ interface TokenData {
 ## Complete Example
 
 ```typescript
-import { InstagramClient, DatabaseTokenStorage, type TokenData } from '@felipeequaresma-design/instagram-api-sdk';
+import { InstagramClient, DatabaseTokenStorage, type TokenData } from '@felipeequaresma/instagram-api-sdk';
 import { PrismaClient } from '@prisma/client';
 
 // 1. Create custom storage adapter
