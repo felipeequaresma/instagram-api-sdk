@@ -27,6 +27,13 @@ export interface InstagramClientConfig {
   defaultScopes?: string[];
   /** Callback when a new token is generated (for database persistence) */
   onTokenGenerated?: (userId: string, token: TokenData) => Promise<void> | void;
+  /**
+   * Development fallback: if the long-lived token exchange fails, keep the
+   * short-lived token (valid ~1h) instead of throwing. Off by default. The
+   * token's real expiry is still controlled by Meta - this only avoids aborting
+   * the OAuth flow so you can test while resolving app permissions.
+   */
+  allowShortLivedToken?: boolean;
 }
 
 // ============================================================================

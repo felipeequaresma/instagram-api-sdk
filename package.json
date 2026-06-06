@@ -27,6 +27,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "validate": "npm run build && npm run type-check && npm run lint && npm run test:coverage && npm pack --dry-run",
+    "mini-api": "npm run build && node examples/mini-api.js",
+    "mini-api:smoke": "npm run build && node examples/mini-api.smoke.mjs",
+    "mini-api:tunnel": "npm run build && node examples/tunnel.mjs",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
@@ -53,6 +56,7 @@
     "eventemitter3": "^5.0.1"
   },
   "devDependencies": {
+    "@types/express": "^4.17.25",
     "@types/node": "^20.10.5",
     "@typescript-eslint/eslint-plugin": "^8.60.1",
     "@typescript-eslint/parser": "^8.60.1",
@@ -60,6 +64,7 @@
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.0.1",
+    "express": "^4.22.2",
     "prettier": "^3.1.1",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3",

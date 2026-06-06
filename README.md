@@ -191,6 +191,16 @@ const children = await instagram.media.getChildren('carousel_media_id');
 ```typescript
 const webhook = instagram.createWebhookHandler('VERIFY_TOKEN');
 
+// Capture the raw body so webhook signatures verify. Meta signs the exact bytes
+// it sends, so JSON.stringify(req.body) would not match the computed signature.
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  })
+);
+
 app.get('/webhook', (req, res) => {
   const challenge = webhook.handleVerification(req.query);
   if (!challenge) {
@@ -203,7 +213,8 @@ app.get('/webhook', (req, res) => {
 
 app.post('/webhook', (req, res) => {
   const signature = req.headers['x-hub-signature-256'];
-  const payload = JSON.stringify(req.body);
+  const payload =
+    (req as express.Request & { rawBody?: Buffer }).rawBody?.toString('utf8') ?? '';
 
   try {
     webhook.processEvent(payload, String(signature || ''));
@@ -321,8 +332,182 @@ The `examples` directory contains runnable examples:
 - `examples/send-message.ts`
 - `examples/fetch-comments.ts`
 - `examples/webhook-server.ts`
+- `examples/mini-api.js` (and `mini-api.smoke.mjs`, `tunnel.mjs`)
 - `examples/database-integration.ts`
 - `examples/custom-config.ts`
+
+## Mini API (Express)
+
+The repository includes a small [Express](https://expressjs.com/) app for testing
+the SDK against real Instagram credentials with plain `curl` or a browser. The
+source lives in `examples/mini-api.js`.
+
+Configuration is read from environment variables (see `.env.example`); copy it to
+`.env` and fill in your credentials:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORT` | `3000` | HTTP port. |
+| `INSTAGRAM_APP_ID` | demo id | Meta app ID. |
+| `INSTAGRAM_APP_SECRET` | _placeholder_ | Meta app secret. Required to authenticate. |
+| `INSTAGRAM_REDIRECT_URI` | `http://localhost:3000/auth/callback` | OAuth callback URL (use your ngrok URL for webhooks). |
+| `WEBHOOK_VERIFY_TOKEN` | `testando` | Token configured in Meta webhooks. |
+| `INSTAGRAM_ACCESS_TOKEN` | empty | Optional token to start authenticated. |
+| `DEBUG` | `false` | Enables SDK debug logs. |
+
+Real environment variables take precedence over `.env`. Never commit a real app
+secret or access token (`.env` is git-ignored).
+
+Run it locally (builds the SDK, then starts the server):
+
+```bash
+npm run mini-api
+```
+
+Or with Docker:
+
+```bash
+docker compose up --build
+```
+
+Open `http://localhost:3000` for a browsable route catalog, or hit
+`GET /auth/login` to jump straight into the OAuth flow.
+
+Available endpoints:
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/` | HTML landing page listing every route. |
+| `GET` | `/health` | Health check. |
+| `GET` | `/config` | Shows non-secret runtime configuration. |
+| `GET` | `/routes` | Route catalog as JSON. |
+| `GET` | `/terms` | Terms of Service page (placeholder). |
+| `GET` | `/privacy` | Privacy Policy page (placeholder). |
+| `GET` | `/auth/login` | Redirects straight to the Instagram OAuth screen. Optional query: `state`. |
+| `GET` | `/auth/url` | Generates an OAuth URL. Optional query: `state`, `scopes` (comma-separated). |
+| `GET` | `/auth/callback?code=...` | Exchanges an OAuth callback code and stores the token in memory. |
+| `POST` | `/auth/token` | Sets an access token manually. Body: `accessToken`, optional `userId`, `expiresAt`. |
+| `POST` | `/auth/user` | Activates a stored in-memory token. Body: `userId`. |
+| `GET` | `/media` | Lists authenticated user media. Query: `limit`, `after`. |
+| `GET` | `/media/:mediaId` | Gets one media object. |
+| `GET` | `/media/:mediaId/insights` | Gets media insights. |
+| `GET` | `/media/:mediaId/children` | Gets carousel children. |
+| `GET` | `/media/:mediaId/comments` | Lists comments for a media object. Query: `limit`, `after`. |
+| `GET` | `/comments/:commentId` | Gets one comment. |
+| `GET` | `/comments/:commentId/replies` | Lists replies to a comment. Query: `limit`. |
+| `POST` | `/comments/:commentId/replies` | Replies to a comment. Body: `message`. |
+| `POST` | `/comments/:commentId/hide` | Hides a comment. |
+| `POST` | `/comments/:commentId/unhide` | Unhides a comment. |
+| `DELETE` | `/comments/:commentId` | Deletes a comment. |
+| `POST` | `/messages/text` | Sends a text message. Body: `recipientId`, `text`. |
+| `POST` | `/messages/image` | Sends an image message. Body: `recipientId`, `imageUrl`. |
+| `POST` | `/messages/video` | Sends a video message. Body: `recipientId`, `videoUrl`. |
+| `POST` | `/messages/:messageId/read` | Marks a message as read. |
+| `GET` | `/conversations` | Lists conversations. Query: `limit`. |
+| `GET` | `/conversations/:conversationId/messages` | Lists conversation messages. Query: `limit`. |
+| `GET` | `/webhook` | Meta webhook verification endpoint. |
+| `POST` | `/webhook` | Meta webhook event endpoint with signature verification. |
+
+Example:
+
+```bash
+curl http://localhost:3000/health
+curl "http://localhost:3000/auth/url?state=local-test"
+curl "http://localhost:3000/media?limit=5"
+```
+
+### Expose it to the internet (webhooks) with localhost.run
+
+Instagram OAuth callbacks and webhook deliveries need a public HTTPS URL.
+[localhost.run](https://localhost.run) provides one through an SSH reverse tunnel
+with nothing to install (it uses the `ssh` client already on your machine):
+
+```bash
+npm run mini-api:tunnel
+```
+
+This opens the tunnel, starts the mini API with `INSTAGRAM_REDIRECT_URI` already
+pointed at the public URL, and prints the exact values to paste into the Meta App
+Dashboard:
+
+```text
+  Public URL          https://<random>.lhr.life
+  Start OAuth login   https://<random>.lhr.life/auth/login
+
+  Paste these into the Meta App Dashboard:
+    OAuth redirect URI    https://<random>.lhr.life/auth/callback
+    Webhook callback URL  https://<random>.lhr.life/webhook
+    Webhook verify token  <WEBHOOK_VERIFY_TOKEN>
+    Privacy Policy URL    https://<random>.lhr.life/privacy
+    Terms of Service URL  https://<random>.lhr.life/terms
+```
+
+Then, in the Meta App Dashboard:
+
+1. Add the **OAuth redirect URI** under the Instagram API OAuth settings.
+2. Add the **Webhook callback URL** and **verify token** under Webhooks, then
+   subscribe to the `messages`, `comments`, and `mentions` fields.
+3. Add the **Privacy Policy URL** (`…/privacy`) and **Terms of Service URL**
+   (`…/terms`) under App Settings &rarr; Basic. The mini API serves placeholder
+   pages there - replace them with your own legal text for a real app.
+4. Open `…/auth/login` to authenticate, then trigger a DM or comment to see the
+   webhook events stream into the terminal.
+
+Notes:
+
+- The free domain changes on every run. For a stable domain, register an SSH key
+  with a [localhost.run account](https://admin.localhost.run) and pass your own
+  command via `LOCALHOST_RUN_SSH` (for example a custom-domain `-R` form).
+- `INSTAGRAM_APP_SECRET` must be set in `.env`, otherwise OAuth token exchange and
+  webhook signature verification will fail for real Meta traffic.
+- Equivalent manual command: `ssh -R 80:localhost:3000 localhost.run`.
+
+### Automated smoke test
+
+Validate routing, validation, webhook verification (challenge + signature) and the
+error handler without real Instagram calls:
+
+```bash
+npm run mini-api:smoke
+```
+
+### Logs and debugging
+
+The mini API logs every request and every error to the console (visible in the
+terminal running `npm run mini-api`, or prefixed with `[server]` under
+`npm run mini-api:tunnel`):
+
+```text
+[req] GET /auth/callback -> 401 (480ms)
+[error] GET /auth/callback -> 401 AuthenticationError: Failed to exchange for long-lived token | upstream {"status":400,"body":{"error_type":"OAuthException","error_message":"..."}}
+```
+
+Errors that originate from Instagram/Meta also include an `upstream` field in the
+JSON response with the real Graph API status and body, so the actual cause is
+visible instead of only the SDK's generic message. Set `DEBUG=true` in `.env` for
+verbose SDK logs (every HTTP call, token exchange step, etc.).
+
+> **`"Unsupported request - method type: get"` (IGApiException, code 100)** on the
+> long-lived token step is a misleading **Meta-side** error, not a wrong HTTP
+> method - the official reference confirms the long-lived exchange is `GET`. It
+> means the app or the authorizing account lacks access. Fix it in the Meta App
+> Dashboard: make the Instagram account an **Instagram tester** (App roles ->
+> Roles) and accept the invite in Instagram (Settings -> Apps and websites ->
+> Tester invites), confirm the app uses **Instagram API with Instagram Login**
+> (Basic Display was deprecated in Dec 2024), and complete **Access verification /
+> App Review** to unlock advanced permissions.
+
+While you sort out those permissions, you can keep developing with a short-lived
+token: set `allowShortLivedToken: true` in the SDK config (or
+`ALLOW_SHORT_LIVED_TOKEN=true` for the mini API). When the long-lived exchange
+fails, the SDK keeps the short-lived token instead of throwing so the OAuth flow
+completes. Important: this does **not** extend the token - Instagram controls the
+real expiry, so the token still dies in ~1h and you re-authenticate. It only
+avoids aborting the flow for local testing; never rely on it in production.
 
 ## Additional Guides
 

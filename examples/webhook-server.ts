@@ -7,8 +7,16 @@ import { InstagramClient } from './../src/index';
 
 const app = express();
 
-// Parse JSON bodies
-app.use(express.json());
+// Parse JSON bodies while keeping the raw payload. Webhook signature
+// verification must run against the exact bytes Meta sent, so re-serializing the
+// parsed body (JSON.stringify(req.body)) would change the bytes and fail HMAC.
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  })
+);
 
 // Initialize SDK
 const instagram = new InstagramClient({
@@ -39,7 +47,7 @@ app.post('/webhook', (req, res) => {
   console.log('📨 Webhook event received');
   
   const signature = req.headers['x-hub-signature-256'] as string;
-  const payload = JSON.stringify(req.body);
+  const payload = (req as express.Request & { rawBody?: Buffer }).rawBody?.toString('utf8') ?? '';
   
   try {
     webhook.processEvent(payload, signature);

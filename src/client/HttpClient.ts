@@ -24,7 +24,7 @@ export class HttpClient {
   constructor(config: HttpClientConfig = {}) {
     this.rateLimiter = config.rateLimiter;
     this.accessToken = config.accessToken;
-    this.apiVersion = config.apiVersion || 'v18.0';
+    this.apiVersion = config.apiVersion || 'v21.0';
 
     this.client = axios.create({
       baseURL: `https://graph.instagram.com/${this.apiVersion}`,

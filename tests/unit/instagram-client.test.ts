@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InstagramClient } from '../../src/client/InstagramClient';
 import { MemoryTokenStorage } from '../../src/auth/TokenStorage';
-import { ValidationError } from '../../src/errors/InstagramError';
+import { AuthenticationError, ValidationError } from '../../src/errors/InstagramError';
 
 type ClientInternals = {
   httpClient: {
@@ -164,6 +164,56 @@ describe('InstagramClient', () => {
     );
 
     vi.useRealTimers();
+    client.destroy();
+  });
+
+  it('falls back to the short-lived token when allowShortLivedToken is enabled', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    const client = createClient({ allowShortLivedToken: true });
+
+    vi.spyOn(client.auth, 'exchangeCodeForToken').mockResolvedValue({
+      accessToken: 'short-token',
+      userId: 'user-1',
+    });
+    vi.spyOn(client.auth, 'exchangeForLongLivedToken').mockRejectedValue(
+      new AuthenticationError('Failed to exchange for long-lived token')
+    );
+    const saveTokenSpy = vi.spyOn(client.auth, 'saveToken').mockResolvedValue(undefined);
+
+    await expect(client.authenticate('oauth-code')).resolves.toBe('user-1');
+
+    expect(saveTokenSpy).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        accessToken: 'short-token',
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      })
+    );
+    expect((client as unknown as ClientInternals).httpClient.accessToken).toBe('short-token');
+
+    vi.useRealTimers();
+    client.destroy();
+  });
+
+  it('propagates the long-lived exchange error when the fallback is disabled', async () => {
+    const client = createClient();
+
+    vi.spyOn(client.auth, 'exchangeCodeForToken').mockResolvedValue({
+      accessToken: 'short-token',
+      userId: 'user-1',
+    });
+    vi.spyOn(client.auth, 'exchangeForLongLivedToken').mockRejectedValue(
+      new AuthenticationError('Failed to exchange for long-lived token')
+    );
+    const saveTokenSpy = vi.spyOn(client.auth, 'saveToken').mockResolvedValue(undefined);
+
+    await expect(client.authenticate('oauth-code')).rejects.toThrow(
+      'Failed to exchange for long-lived token'
+    );
+    expect(saveTokenSpy).not.toHaveBeenCalled();
+
     client.destroy();
   });
 

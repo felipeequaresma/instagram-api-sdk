@@ -10,6 +10,9 @@ import { RateLimiter } from '../utils/rateLimit';
 import { WebhookHandler } from '../webhooks/WebhookHandler';
 import { HttpClient } from './HttpClient';
 
+/** Instagram short-lived access tokens are valid for ~1 hour. */
+const SHORT_LIVED_TOKEN_TTL_SECONDS = 3600;
+
 /**
  * Main Instagram API SDK Client
  */
@@ -116,15 +119,34 @@ export class InstagramClient {
     // Exchange code for short-lived token
     const shortLived = await this.authManager.exchangeCodeForToken(code);
 
-    // Exchange for long-lived token
-    const longLived = await this.authManager.exchangeForLongLivedToken(shortLived.accessToken);
+    // Exchange for a long-lived token. If that fails and the dev fallback is
+    // enabled, keep the short-lived token (valid ~1h) so the OAuth flow still
+    // completes - handy for local testing while app permissions are pending.
+    let accessToken: string;
+    let expiresIn: number | undefined;
+    try {
+      const longLived = await this.authManager.exchangeForLongLivedToken(shortLived.accessToken);
+      accessToken = longLived.accessToken;
+      expiresIn = longLived.expiresIn;
+    } catch (error) {
+      if (!this.config.allowShortLivedToken) {
+        throw error;
+      }
+      logger.warn(
+        'Long-lived token exchange failed; keeping the short-lived token (expires in ~1h) ' +
+          'because allowShortLivedToken is enabled',
+        error
+      );
+      accessToken = shortLived.accessToken;
+      expiresIn = SHORT_LIVED_TOKEN_TTL_SECONDS;
+    }
 
     // Calculate expiry timestamp
-    const expiresAt = Math.floor(Date.now() / 1000) + (longLived.expiresIn || 5184000); // 60 days default
+    const expiresAt = Math.floor(Date.now() / 1000) + (expiresIn || 5184000); // 60 days default
 
     // Save token
     await this.authManager.saveToken(shortLived.userId, {
-      accessToken: longLived.accessToken,
+      accessToken,
       tokenType: 'Bearer',
       expiresAt,
       userId: shortLived.userId,
@@ -133,7 +155,7 @@ export class InstagramClient {
     // Call onTokenGenerated callback if provided
     if (this.config.onTokenGenerated) {
       await this.config.onTokenGenerated(shortLived.userId, {
-        accessToken: longLived.accessToken,
+        accessToken,
         tokenType: 'Bearer',
         expiresAt,
         userId: shortLived.userId,
@@ -144,7 +166,7 @@ export class InstagramClient {
 
     // Automatically set user context if requested
     if (autoSetUser) {
-      this.httpClient.setAccessToken(longLived.accessToken);
+      this.httpClient.setAccessToken(accessToken);
       logger.debug('User context set automatically', { userId: shortLived.userId });
     }
 

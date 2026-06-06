@@ -1,0 +1,7 @@
+services:
+  instagram-sdk-api:
+    build:
+      context: .
+    image: instagram-api-sdk-mini-api:local
+    ports:
+      - "3000:3000"
